@@ -296,21 +296,41 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
   
   try {
     // Read the JSON file
+    statusDiv.textContent = 'Loading file...';
+    statusDiv.className = 'status';
+    
     const text = await file.text();
+    console.log('File loaded, length:', text.length);
+    
     const sessionData = JSON.parse(text);
+    console.log('JSON parsed:', sessionData);
     
     if (!sessionData.tabs || !Array.isArray(sessionData.tabs)) {
-      throw new Error('Invalid JSON format');
+      throw new Error('Invalid JSON format - missing tabs array');
     }
+    
+    const totalTabs = sessionData.tabs.length;
+    console.log('Total tabs in file:', totalTabs);
+    
+    statusDiv.textContent = `Found ${totalTabs} tabs, opening...`;
     
     // Group tabs by their group
     const groupMap = new Map();
     const ungroupedTabs = [];
+    let skippedCount = 0;
     
-    sessionData.tabs.forEach(tab => {
+    sessionData.tabs.forEach((tab, index) => {
       // Validate URL exists and is valid
-      if (!tab.url || typeof tab.url !== 'string') return;
-      if (!tab.url.startsWith('http://') && !tab.url.startsWith('https://') && !tab.url.startsWith('file://')) return;
+      if (!tab.url || typeof tab.url !== 'string') {
+        console.warn('Skipping tab', index, '- no URL:', tab);
+        skippedCount++;
+        return;
+      }
+      if (!tab.url.startsWith('http://') && !tab.url.startsWith('https://') && !tab.url.startsWith('file://')) {
+        console.warn('Skipping tab', index, '- invalid URL:', tab.url);
+        skippedCount++;
+        return;
+      }
       
       if (tab.group && tab.color) {
         const key = `${tab.group}|${tab.color}`;
@@ -323,12 +343,24 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
       }
     });
     
+    console.log('Ungrouped tabs:', ungroupedTabs.length);
+    console.log('Groups:', groupMap.size);
+    console.log('Skipped tabs:', skippedCount);
+    
     let openedCount = 0;
+    const devMode = document.getElementById('devMode').checked;
+    
+    if (devMode) {
+      console.log('🛠️ DEV MODE: Simulating tab operations (not actually opening)');
+    }
     
     // Open ungrouped tabs
     for (const tab of ungroupedTabs) {
       try {
-        await chrome.tabs.create({ url: tab.url, active: false });
+        console.log('Opening ungrouped tab:', tab.url);
+        if (!devMode) {
+          await chrome.tabs.create({ url: tab.url, active: false });
+        }
         openedCount++;
       } catch (err) {
         console.error('Failed to open tab:', tab.url, err);
@@ -340,26 +372,51 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
       const [groupTitle, groupColor] = key.split('|');
       const tabIds = [];
       
+      console.log(`Opening group "${groupTitle}" with ${tabs.length} tabs`);
+      
       for (const tab of tabs) {
         try {
-          const newTab = await chrome.tabs.create({ url: tab.url, active: false });
-          tabIds.push(newTab.id);
+          console.log('Opening grouped tab:', tab.url);
+          if (!devMode) {
+            const newTab = await chrome.tabs.create({ url: tab.url, active: false });
+            tabIds.push(newTab.id);
+          } else {
+            // Simulate tab ID in dev mode
+            tabIds.push(1000 + openedCount);
+          }
           openedCount++;
         } catch (err) {
           console.error('Failed to open tab:', tab.url, err);
         }
       }
       
-      if (tabIds.length > 0) {
-        const groupId = await chrome.tabs.group({ tabIds });
-        await chrome.tabGroups.update(groupId, {
-          title: groupTitle,
-          color: groupColor
-        });
+      if (tabIds.length > 0 && !devMode) {
+        try {
+          const groupId = await chrome.tabs.group({ tabIds });
+          await chrome.tabGroups.update(groupId, {
+            title: groupTitle,
+            color: groupColor
+          });
+          console.log(`Created group "${groupTitle}" with ${tabIds.length} tabs`);
+        } catch (err) {
+          console.error('Failed to create group:', groupTitle, err);
+        }
+      } else if (tabIds.length > 0) {
+        console.log(`🛠️ DEV: Would create group "${groupTitle}" with ${tabIds.length} tabs`);
       }
     }
     
-    statusDiv.textContent = `✓ Imported ${openedCount} tabs from JSON!`;
+    console.log('Total opened:', openedCount, 'of', totalTabs);
+    
+    if (openedCount === 0) {
+      statusDiv.textContent = `✗ No tabs opened! Check console (F12) for details`;
+      statusDiv.className = 'status error';
+    } else {
+      const msg = skippedCount > 0 ? ` (${skippedCount} skipped)` : '';
+      const devMsg = devMode ? ' [DEV MODE - SIMULATED]' : '';
+      statusDiv.textContent = `✓ ${devMode ? 'Simulated' : 'Imported'} ${openedCount}/${totalTabs} tabs${msg}${devMsg}!`;
+      statusDiv.className = 'status success';
+    }
     statusDiv.className = 'status success';
     
     // Reset file input
