@@ -308,6 +308,10 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
     const ungroupedTabs = [];
     
     sessionData.tabs.forEach(tab => {
+      // Validate URL exists and is valid
+      if (!tab.url || typeof tab.url !== 'string') return;
+      if (!tab.url.startsWith('http://') && !tab.url.startsWith('https://') && !tab.url.startsWith('file://')) return;
+      
       if (tab.group && tab.color) {
         const key = `${tab.group}|${tab.color}`;
         if (!groupMap.has(key)) {
@@ -323,8 +327,12 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
     
     // Open ungrouped tabs
     for (const tab of ungroupedTabs) {
-      await chrome.tabs.create({ url: tab.url, active: false });
-      openedCount++;
+      try {
+        await chrome.tabs.create({ url: tab.url, active: false });
+        openedCount++;
+      } catch (err) {
+        console.error('Failed to open tab:', tab.url, err);
+      }
     }
     
     // Open grouped tabs
@@ -333,9 +341,13 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
       const tabIds = [];
       
       for (const tab of tabs) {
-        const newTab = await chrome.tabs.create({ url: tab.url, active: false });
-        tabIds.push(newTab.id);
-        openedCount++;
+        try {
+          const newTab = await chrome.tabs.create({ url: tab.url, active: false });
+          tabIds.push(newTab.id);
+          openedCount++;
+        } catch (err) {
+          console.error('Failed to open tab:', tab.url, err);
+        }
       }
       
       if (tabIds.length > 0) {
