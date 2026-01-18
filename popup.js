@@ -1,8 +1,44 @@
+// Helper functions for encoding/decoding tab data
+function encodeTabData(tab, group) {
+  // Ultra-compact array format: [url, groupName, groupColor]
+  // Omit group data if not in a group to save space
+  const data = group ? [tab.url, group.title, group.color] : [tab.url];
+  const json = JSON.stringify(data);
+  // Use btoa directly without encodeURIComponent for shorter output
+  return btoa(unescape(encodeURIComponent(json)));
+}
+
+function decodeTabData(encoded) {
+  try {
+    const json = decodeURIComponent(escape(atob(encoded)));
+    const data = JSON.parse(json);
+    return {
+      url: data[0],
+      title: '',
+      groupTitle: data[1] || null,
+      groupColor: data[2] || null
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Check if line is encoded format
+function isEncodedFormat(line) {
+  try {
+    atob(line);
+    return line.length > 20 && !line.includes(' ') && /^[A-Za-z0-9+/=]+$/.test(line);
+  } catch (e) {
+    return false;
+  }
+}
+
 // Get all tabs and copy URLs to clipboard
 document.getElementById('copyTabs').addEventListener('click', async () => {
   const statusDiv = document.getElementById('copyStatus');
   const urlInput = document.getElementById('urlInput');
   const includeGroups = document.getElementById('includeGroups').checked;
+  const useEncoded = document.getElementById('useEncoded').checked;
   
   try {
     // Get all tabs in the current window
@@ -22,7 +58,14 @@ document.getElementById('copyTabs').addEventListener('click', async () => {
     
     // Extract URLs and group info from tabs
     let output;
-    if (includeGroups) {
+    if (useEncoded) {
+      // Encoded format - compact Base64 strings
+      output = tabs.map(tab => {
+        const group = (tab.groupId !== -1 && groups[tab.groupId]) ? groups[tab.groupId] : null;
+        return encodeTabData(tab, group);
+      }).join('\n');
+    } else if (includeGroups) {
+      // Plain text with group info
       output = tabs.map(tab => {
         if (tab.groupId !== -1 && groups[tab.groupId]) {
           const group = groups[tab.groupId];
@@ -31,6 +74,7 @@ document.getElementById('copyTabs').addEventListener('click', async () => {
         return tab.url;
       }).join('\n');
     } else {
+      // Plain URLs only
       output = tabs.map(tab => tab.url).join('\n');
     }
     
@@ -41,8 +85,8 @@ document.getElementById('copyTabs').addEventListener('click', async () => {
     urlInput.value = output;
     
     // Show success message
-    const groupMsg = includeGroups ? ' with group info' : '';
-    statusDiv.textContent = `✓ Copied ${tabs.length} tabs${groupMsg} to clipboard!`;
+    const formatMsg = useEncoded ? ' (encoded)' : (includeGroups ? ' with groups' : '');
+    statusDiv.textContent = `✓ Copied ${tabs.length} tabs${formatMsg} to clipboard!`;
     statusDiv.className = 'status success';
     
     // Clear message after 3 seconds
@@ -86,9 +130,17 @@ document.getElementById('openTabs').addEventListener('click', async () => {
     
     // Parse lines for URLs and optional group info
     const tabsData = lines.map(line => {
+      // Check if it's encoded format
+      if (isEncodedFormat(line)) {
+        const decoded = decodeTabData(line);
+        if (decoded) return decoded;
+      }
+      
+      // Plain text format
       const parts = line.split('|').map(p => p.trim());
       return {
         url: parts[0],
+        title: '',
         groupTitle: parts[1] || null,
         groupColor: parts[2] || null
       };

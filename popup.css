@@ -124,12 +124,18 @@ textarea:focus {
   color: #333;
 }
 
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
   font-size: 13px;
   color: #666;
-  margin-bottom: 10px;
   cursor: pointer;
   user-select: none;
 }

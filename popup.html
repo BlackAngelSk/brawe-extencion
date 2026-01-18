@@ -14,10 +14,16 @@
       <button id="copyTabs" class="btn btn-primary">
         📋 Copy All Tabs
       </button>
-      <label class="checkbox-label">
-        <input type="checkbox" id="includeGroups" checked>
-        Include group information
-      </label>
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="includeGroups" checked>
+          Include group information
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="useEncoded" checked>
+          Use encoded format (compact)
+        </label>
+      </div>
       <div id="copyStatus" class="status"></div>
     </div>
     
@@ -34,9 +40,9 @@
     </div>
     
     <div class="info">
-      <p><strong>Copy:</strong> Copies all tabs with optional group info</p>
-      <p><strong>Open:</strong> Opens URLs and restores groups</p>
-      <p><strong>Format:</strong> URL | GroupName | Color</p>
+      <p><strong>Encoded:</strong> Compact Base64 format (recommended)</p>
+      <p><strong>Plain:</strong> URL | GroupName | Color</p>
+      <p><strong>Auto-detect:</strong> Supports both formats when opening</p>
     </div>
   </div>
   
