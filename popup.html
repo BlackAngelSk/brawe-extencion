@@ -28,6 +28,24 @@
     </div>
     
     <div class="section">
+      <button id="closeDuplicates" class="btn btn-warning">
+        🗑️ Close Duplicate Tabs
+      </button>
+      <div id="duplicateStatus" class="status"></div>
+    </div>
+    
+    <div class="section">
+      <button id="exportSession" class="btn btn-secondary">
+        💾 Export Session to JSON
+      </button>
+      <button id="importSession" class="btn btn-secondary">
+        📂 Import Session from JSON
+      </button>
+      <input type="file" id="fileInput" accept=".json" style="display: none;">
+      <div id="sessionStatus" class="status"></div>
+    </div>
+    
+    <div class="section">
       <textarea id="urlInput" placeholder="Paste URLs or tab data here (one per line)..." rows="8"></textarea>
       <label class="checkbox-label">
         <input type="checkbox" id="restoreGroups" checked>
@@ -41,8 +59,8 @@
     
     <div class="info">
       <p><strong>Encoded:</strong> Compact Base64 format (recommended)</p>
-      <p><strong>Plain:</strong> URL | GroupName | Color</p>
-      <p><strong>Auto-detect:</strong> Supports both formats when opening</p>
+      <p><strong>Export:</strong> Save all tabs as JSON file</p>
+      <p><strong>Import:</strong> Load tabs from saved JSON file</p>
     </div>
   </div>
   

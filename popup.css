@@ -67,6 +67,24 @@ h1 {
   background: #45a049;
 }
 
+.btn-warning {
+  background: #ff9800;
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #fb8c00;
+}
+
+.btn-secondary {
+  background: #607d8b;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #546e7a;
+}
+
 textarea {
   width: 100%;
   padding: 10px;

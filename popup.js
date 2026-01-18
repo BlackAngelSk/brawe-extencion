@@ -227,3 +227,185 @@ document.getElementById('openTabs').addEventListener('click', async () => {
     statusDiv.className = 'status error';
   }
 });
+
+// Export session to JSON file
+document.getElementById('exportSession').addEventListener('click', async () => {
+  const statusDiv = document.getElementById('sessionStatus');
+  
+  try {
+    // Get all tabs in the current window
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    
+    // Get all tab groups
+    const groups = {};
+    const allGroups = await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+    allGroups.forEach(group => {
+      groups[group.id] = {
+        title: group.title || 'Untitled',
+        color: group.color
+      };
+    });
+    
+    // Build session data
+    const sessionData = {
+      session: `Session_${new Date().toISOString().split('T')[0]}`,
+      date: new Date().toISOString(),
+      tabCount: tabs.length,
+      tabs: tabs.map(tab => ({
+        url: tab.url,
+        title: tab.title,
+        group: (tab.groupId !== -1 && groups[tab.groupId]) ? groups[tab.groupId].title : null,
+        color: (tab.groupId !== -1 && groups[tab.groupId]) ? groups[tab.groupId].color : null
+      }))
+    };
+    
+    // Create and download JSON file
+    const jsonString = JSON.stringify(sessionData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tabs_${new Date().toISOString().split('T')[0]}_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    statusDiv.textContent = `✓ Exported ${tabs.length} tabs to JSON!`;
+    statusDiv.className = 'status success';
+    
+    setTimeout(() => {
+      statusDiv.textContent = '';
+      statusDiv.className = 'status';
+    }, 3000);
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+});
+
+// Import session from JSON file
+document.getElementById('importSession').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', async (event) => {
+  const statusDiv = document.getElementById('sessionStatus');
+  const file = event.target.files[0];
+  
+  if (!file) return;
+  
+  try {
+    // Read the JSON file
+    const text = await file.text();
+    const sessionData = JSON.parse(text);
+    
+    if (!sessionData.tabs || !Array.isArray(sessionData.tabs)) {
+      throw new Error('Invalid JSON format');
+    }
+    
+    // Group tabs by their group
+    const groupMap = new Map();
+    const ungroupedTabs = [];
+    
+    sessionData.tabs.forEach(tab => {
+      if (tab.group && tab.color) {
+        const key = `${tab.group}|${tab.color}`;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, []);
+        }
+        groupMap.get(key).push(tab);
+      } else {
+        ungroupedTabs.push(tab);
+      }
+    });
+    
+    let openedCount = 0;
+    
+    // Open ungrouped tabs
+    for (const tab of ungroupedTabs) {
+      await chrome.tabs.create({ url: tab.url, active: false });
+      openedCount++;
+    }
+    
+    // Open grouped tabs
+    for (const [key, tabs] of groupMap.entries()) {
+      const [groupTitle, groupColor] = key.split('|');
+      const tabIds = [];
+      
+      for (const tab of tabs) {
+        const newTab = await chrome.tabs.create({ url: tab.url, active: false });
+        tabIds.push(newTab.id);
+        openedCount++;
+      }
+      
+      if (tabIds.length > 0) {
+        const groupId = await chrome.tabs.group({ tabIds });
+        await chrome.tabGroups.update(groupId, {
+          title: groupTitle,
+          color: groupColor
+        });
+      }
+    }
+    
+    statusDiv.textContent = `✓ Imported ${openedCount} tabs from JSON!`;
+    statusDiv.className = 'status success';
+    
+    // Reset file input
+    event.target.value = '';
+    
+    setTimeout(() => {
+      statusDiv.textContent = '';
+      statusDiv.className = 'status';
+    }, 3000);
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+    event.target.value = '';
+  }
+});
+
+// Close duplicate tabs
+document.getElementById('closeDuplicates').addEventListener('click', async () => {
+  const statusDiv = document.getElementById('duplicateStatus');
+  
+  try {
+    // Get all tabs in the current window
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    
+    // Track URLs and find duplicates
+    const urlMap = new Map();
+    const duplicatesToClose = [];
+    
+    tabs.forEach(tab => {
+      if (urlMap.has(tab.url)) {
+        // This is a duplicate - mark for closing
+        duplicatesToClose.push(tab.id);
+      } else {
+        // First occurrence - keep it
+        urlMap.set(tab.url, tab.id);
+      }
+    });
+    
+    if (duplicatesToClose.length === 0) {
+      statusDiv.textContent = '✓ No duplicate tabs found!';
+      statusDiv.className = 'status success';
+    } else {
+      // Close all duplicate tabs
+      await chrome.tabs.remove(duplicatesToClose);
+      
+      statusDiv.textContent = `✓ Closed ${duplicatesToClose.length} duplicate tabs!`;
+      statusDiv.className = 'status success';
+    }
+    
+    // Clear message after 3 seconds
+    setTimeout(() => {
+      statusDiv.textContent = '';
+      statusDiv.className = 'status';
+    }, 3000);
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+});
