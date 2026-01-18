@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Manager</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Tab Manager</h1>
+    
+    <div class="section">
+      <button id="copyTabs" class="btn btn-primary">
+        📋 Copy All Tabs
+      </button>
+      <label class="checkbox-label">
+        <input type="checkbox" id="includeGroups" checked>
+        Include group information
+      </label>
+      <div id="copyStatus" class="status"></div>
+    </div>
+    
+    <div class="section">
+      <textarea id="urlInput" placeholder="Paste URLs or tab data here (one per line)..." rows="8"></textarea>
+      <label class="checkbox-label">
+        <input type="checkbox" id="restoreGroups" checked>
+        Restore groups if available
+      </label>
+      <button id="openTabs" class="btn btn-success">
+        🚀 Open Tabs
+      </button>
+      <div id="openStatus" class="status"></div>
+    </div>
+    
+    <div class="info">
+      <p><strong>Copy:</strong> Copies all tabs with optional group info</p>
+      <p><strong>Open:</strong> Opens URLs and restores groups</p>
+      <p><strong>Format:</strong> URL | GroupName | Color</p>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
