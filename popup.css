@@ -159,6 +159,118 @@ textarea:focus {
   accent-color: #ffc107;
 }
 
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1e1e1e;
+  }
+  
+  .container {
+    background: #2d2d2d;
+    color: #e0e0e0;
+  }
+  
+  h1 {
+    color: #ffffff;
+    border-bottom: 2px solid #404040;
+  }
+  
+  .btn {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+  
+  .btn:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  }
+  
+  .btn-primary {
+    background: #ff7043;
+  }
+  
+  .btn-primary:hover {
+    background: #ff5722;
+  }
+  
+  .btn-success {
+    background: #66bb6a;
+  }
+  
+  .btn-success:hover {
+    background: #4caf50;
+  }
+  
+  .btn-warning {
+    background: #ffa726;
+  }
+  
+  .btn-warning:hover {
+    background: #ff9800;
+  }
+  
+  .btn-secondary {
+    background: #78909c;
+  }
+  
+  .btn-secondary:hover {
+    background: #607d8b;
+  }
+  
+  textarea {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border: 2px solid #404040;
+  }
+  
+  textarea:focus {
+    border-color: #ff7043;
+  }
+  
+  textarea::placeholder {
+    color: #888;
+  }
+  
+  .status.success {
+    color: #81c784;
+    background: #1b5e20;
+  }
+  
+  .status.error {
+    color: #e57373;
+    background: #b71c1c;
+  }
+  
+  .info {
+    background: #1e1e1e;
+    border-left: 4px solid #ff7043;
+  }
+  
+  .info p {
+    color: #b0b0b0;
+  }
+  
+  .info strong {
+    color: #ffffff;
+  }
+  
+  .dev-section {
+    background: #3a3a1a;
+    border: 1px dashed #ffc107;
+  }
+  
+  .dev-mode {
+    color: #ffd54f;
+  }
+  
+  .checkbox-label {
+    color: #b0b0b0;
+  }
+  
+  .checkbox-label:hover {
+    color: #e0e0e0;
+  }
+}
+
+
 .checkbox-group {
   display: flex;
   flex-direction: column;
