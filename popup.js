@@ -1,3 +1,19 @@
+// Update tab count display
+async function updateTabCount() {
+  const currentWindowTabs = await chrome.tabs.query({ currentWindow: true });
+  const allTabs = await chrome.tabs.query({});
+  
+  const tabCountElement = document.getElementById('tabCount');
+  const allTabCountElement = document.getElementById('allTabCount');
+  
+  if (tabCountElement) {
+    tabCountElement.textContent = currentWindowTabs.length;
+  }
+  if (allTabCountElement) {
+    allTabCountElement.textContent = allTabs.length;
+  }
+}
+
 // Helper functions for encoding/decoding tab data
 function encodeTabData(tab, group) {
   // Ultra-compact array format: [url, groupName, groupColor]
@@ -478,3 +494,12 @@ document.getElementById('closeDuplicates').addEventListener('click', async () =>
     statusDiv.className = 'status error';
   }
 });
+
+// Initialize tab count on popup load
+updateTabCount();
+
+// Listen for tab changes to update the count
+chrome.tabs.onCreated.addListener(updateTabCount);
+chrome.tabs.onRemoved.addListener(updateTabCount);
+chrome.tabs.onAttached.addListener(updateTabCount);
+chrome.tabs.onDetached.addListener(updateTabCount);

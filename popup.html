@@ -10,6 +10,18 @@
   <div class="container">
     <h1>Tab Manager</h1>
     
+    <div class="tabs-counter">
+      <div class="counter-item">
+        <span class="counter-label">This Window:</span>
+        <span id="tabCount" class="counter-value">0</span>
+      </div>
+      <div class="counter-divider">|</div>
+      <div class="counter-item">
+        <span class="counter-label">All Windows:</span>
+        <span id="allTabCount" class="counter-value">0</span>
+      </div>
+    </div>
+    
     <div class="section">
       <button id="copyTabs" class="btn btn-primary">
         📋 Copy All Tabs
@@ -58,6 +70,7 @@
         <input type="checkbox" id="restoreGroups" checked>
         Restore groups if available
       </label>
+      ‎ 
       <button id="openTabs" class="btn btn-success">
         🚀 Open Tabs
       </button>
