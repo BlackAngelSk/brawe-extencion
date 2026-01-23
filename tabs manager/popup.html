@@ -63,6 +63,57 @@
         🛠️ Developer Mode (simulate tab operations)
       </label>
     </div>
+
+    <div class="section privacy-section">
+      <button id="scanPrivacy" class="btn btn-privacy">
+        🔒 Privacy Scan
+      </button>
+      <div id="privacyStatus" class="status"></div>
+      <div id="privacySummary" class="privacy-card hidden">
+        <div class="privacy-score">
+          <div class="score-label">Privacy Score</div>
+          <div id="privacyScore" class="score-value">--</div>
+        </div>
+        <div class="privacy-metrics">
+          <div class="metric">
+            <span class="metric-label">Third-party hosts</span>
+            <span id="thirdPartyCount" class="metric-value">0</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Tracker matches</span>
+            <span id="trackerCount" class="metric-value">0</span>
+          </div>
+        </div>
+        <div class="privacy-list">
+          <div class="list-title">Third-party domains</div>
+          <ul id="thirdPartyList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section video-section">
+      <h3>📹 Video Downloader</h3>
+      <button id="scanNetworkVideos" class="btn btn-scan">
+        🔍 Scan Network for Videos
+      </button>
+      <div id="networkVideosList" class="network-videos hidden"></div>
+      
+      <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+        <input type="text" id="videoUrl" class="video-input" placeholder="Or paste video URL here...">
+        <button id="downloadVideo" class="btn btn-download">
+          ⬇️ Download Video
+        </button>
+        <button id="detectVideo" class="btn btn-secondary">
+          🔍 Detect Video on Page
+        </button>
+      </div>
+      
+      <div id="videoStatus" class="status"></div>
+      <div id="videoInfo" class="video-info hidden">
+        <div class="video-title" id="videoTitle"></div>
+        <div class="video-formats" id="videoFormats"></div>
+      </div>
+    </div>
     
     <div class="section">
       <textarea id="urlInput" placeholder="Paste URLs or tab data here (one per line)..." rows="8"></textarea>
