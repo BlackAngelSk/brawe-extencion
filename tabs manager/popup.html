@@ -89,6 +89,15 @@
           <ul id="thirdPartyList"></ul>
         </div>
       </div>
+      
+      <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 500;">🚫 Block Tracker Names:</label>
+        <textarea id="trackerBlockList" class="tracker-input" placeholder="Enter tracker names to block (one per line)&#10;Examples:&#10;google-analytics&#10;facebook-pixel&#10;hotjar&#10;doubleclick&#10;mixpanel" rows="5"></textarea>
+        <button id="saveTrackerList" class="btn btn-primary" style="margin-top: 8px; width: 100%;">
+          💾 Save Blocked Trackers
+        </button>
+        <div id="trackerSaveStatus" class="status"></div>
+      </div>
     </div>
 
     <div class="section video-section">

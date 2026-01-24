@@ -1614,3 +1614,38 @@ document.getElementById('videoUrl').addEventListener('keypress', (e) => {
     downloadVideo();
   }
 });
+// Tracker blocking feature
+async function loadTrackerBlockList() {
+  const data = await chrome.storage.local.get('trackerBlockList');
+  const trackerList = data.trackerBlockList || '';
+  document.getElementById('trackerBlockList').value = trackerList;
+}
+
+document.getElementById('saveTrackerList').addEventListener('click', async () => {
+  const trackerList = document.getElementById('trackerBlockList').value;
+  const trackers = trackerList
+    .split('\n')
+    .map(t => t.trim().toLowerCase())
+    .filter(t => t.length > 0);
+  
+  await chrome.storage.local.set({ trackerBlockList: trackerList });
+  
+  // Send to content scripts to activate blocking
+  const tabs = await chrome.tabs.query({});
+  tabs.forEach(tab => {
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'updateTrackerBlockList',
+      trackers: trackers
+    }).catch(() => {}); // Ignore errors for non-accessible tabs
+  });
+  
+  const statusDiv = document.getElementById('trackerSaveStatus');
+  statusDiv.textContent = `✓ Saved ${trackers.length} tracker(s) to block`;
+  statusDiv.className = 'status success';
+  setTimeout(() => {
+    statusDiv.textContent = '';
+  }, 3000);
+});
+
+// Load tracker list on popup open
+loadTrackerBlockList();

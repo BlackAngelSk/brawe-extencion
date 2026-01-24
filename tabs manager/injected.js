@@ -12,7 +12,54 @@ if (!window.__videoBlobsInitialized) {
   window.__mseUrlToId = window.__mseUrlToId || {};
   window.__ffmpegLoader = window.__ffmpegLoader || null;
   window.__ffmpegInstance = window.__ffmpegInstance || null;
+  window.__trackerBlockList = window.__trackerBlockList || []; // List of tracker names to block
   const detectedBlobs = [];
+
+  // Tracker blocking: intercept script creation
+  const originalCreateElement = document.createElement;
+  document.createElement = function(tagName) {
+    const element = originalCreateElement.call(document, tagName);
+    
+    if (tagName.toLowerCase() === 'script') {
+      const handler = {
+        set(target, prop, value) {
+          if (prop === 'src' && typeof value === 'string') {
+            // Check if this script URL contains any blocked tracker names
+            const trackerMatch = window.__trackerBlockList.some(tracker => 
+              value.toLowerCase().includes(tracker.toLowerCase())
+            );
+            
+            if (trackerMatch) {
+              console.warn('[TRACKER BLOCKED]', value);
+              return true; // Block the assignment
+            }
+          }
+          target[prop] = value;
+          return true;
+        }
+      };
+      
+      return new Proxy(element, handler);
+    }
+    
+    return element;
+  };
+  
+  // Also block fetch/XMLHttpRequest to tracking endpoints
+  const origFetch = window.fetch;
+  window.fetch = function(...args) {
+    const url = args[0];
+    if (typeof url === 'string') {
+      const trackerMatch = window.__trackerBlockList.some(tracker =>
+        url.toLowerCase().includes(tracker.toLowerCase())
+      );
+      if (trackerMatch) {
+        console.warn('[TRACKER BLOCKED]', url);
+        return Promise.reject(new Error('Tracker blocked: ' + url));
+      }
+    }
+    return origFetch.apply(this, args);
+  };
 
   // Helper: rebuild blob from captured MSE buffers (choose best track)
   function pickBestSource(capture) {
@@ -81,14 +128,51 @@ if (!window.__videoBlobsInitialized) {
       try {
         if (!window.createFFmpeg) {
           const script = document.createElement('script');
-          script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js';
-          script.onload = resolve;
-          script.onerror = () => reject(new Error('Failed to load ffmpeg.wasm'));
+          const cdnUrl = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js';
+          
+          // Handle Trusted Types for YouTube's strict CSP
+          try {
+            if (window.trustedTypes) {
+              let policy = trustedTypes.defaultPolicy;
+              if (!policy) {
+                // Try to create or get existing policy
+                try {
+                  policy = trustedTypes.createPolicy('ffmpeg-ext-loader', {
+                    createScriptURL: (url) => url
+                  });
+                } catch (e) {
+                  // Policy might already exist, try to get it
+                  console.log('[FFMPEG] Policy creation failed, trying direct assignment:', e.message);
+                }
+              }
+              if (policy) {
+                script.src = policy.createScriptURL(cdnUrl);
+                console.log('[FFMPEG] Using Trusted Types policy');
+              } else {
+                // Last resort: assign directly (will fail on strict CSP)
+                script.src = cdnUrl;
+                console.warn('[FFMPEG] No policy available, direct assignment (may fail)');
+              }
+            } else {
+              script.src = cdnUrl;
+            }
+          } catch (ttError) {
+            console.error('[FFMPEG] Trusted Types error:', ttError);
+            reject(new Error('Trusted Types violation: ' + ttError.message));
+            return;
+          }
+          
+          script.onload = () => {
+            console.log('[FFMPEG] ✓ Script loaded successfully');
+            resolve();
+          };
+          script.onerror = () => reject(new Error('Failed to load ffmpeg.wasm from CDN'));
           document.documentElement.appendChild(script);
         } else {
           resolve();
         }
       } catch (e) {
+        console.error('[FFMPEG] Load error:', e);
         reject(e);
       }
     });
@@ -327,33 +411,10 @@ if (!window.__videoBlobsInitialized) {
         if (audioRebuild && audioRebuild.blob) {
           const audioBlob = audioRebuild.blob;
           console.log('✓ Audio track available:', audioBlob.type, audioBlob.size, 'bytes');
-          try {
-            console.log('Muxing audio+video via ffmpeg.wasm...', 'video:', blob.size, 'audio:', audioBlob.size);
-            const muxed = await muxToMkv(blob, audioBlob);
-            console.log('Mux result:', muxed ? ('success, size: ' + muxed.size) : 'null');
-            if (muxed) {
-              // Success! Download muxed file
-              const muxUrl = URL.createObjectURL(muxed);
-              const muxLink = document.createElement('a');
-              muxLink.href = muxUrl;
-              muxLink.download = 'video_with_audio_' + Date.now() + '.mkv';
-              document.body.appendChild(muxLink);
-              muxLink.click();
-              setTimeout(() => {
-                muxLink.remove();
-                URL.revokeObjectURL(muxUrl);
-              }, 500);
-              console.log('✓ Muxed download triggered:', muxLink.download, 'size:', muxed.size);
-              return; // Done!
-            } else {
-              console.warn('Mux returned null, falling back to separate downloads');
-            }
-          } catch (e) {
-            console.error('Mux attempt failed:', e.message, e.stack);
-            console.warn('Falling back to separate downloads due to error');
-          }
+          console.log('NOTE: In-browser muxing blocked by YouTube CSP. Downloading separate video + audio files.');
+          console.log('To combine: Use free tools like ffmpeg, VLC, HandBrake, or online video mergers.');
           
-          // Mux failed, download video + audio separately
+          // Download video + audio separately (muxing blocked by CSP)
           console.log('Downloading video separately...');
           const videoUrl = URL.createObjectURL(blob);
           const videoLink = document.createElement('a');
@@ -412,6 +473,11 @@ if (!window.__videoBlobsInitialized) {
         console.error('❌ Download failed:', e.message);
         window.postMessage({ type: 'DOWNLOAD_RESULT', result: { success: false, error: e.message } }, '*');
       }
+    }
+    else if (event.data.type === 'UPDATE_TRACKER_BLOCK_LIST') {
+      // Update the list of trackers to block
+      window.__trackerBlockList = event.data.trackers || [];
+      console.log('[TRACKER BLOCKER] Updated block list:', window.__trackerBlockList);
     }
   });
   

@@ -125,6 +125,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     detectedBlobs = [];
     sendResponse({ success: true });
   }
+  else if (request.action === 'updateTrackerBlockList') {
+    // Send tracker list to page context
+    window.postMessage({
+      type: 'UPDATE_TRACKER_BLOCK_LIST',
+      trackers: request.trackers
+    }, '*');
+    sendResponse({ success: true });
+  }
   
   return true;
 });
