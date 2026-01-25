@@ -13,6 +13,8 @@ if (!window.__videoBlobsInitialized) {
   window.__ffmpegLoader = window.__ffmpegLoader || null;
   window.__ffmpegInstance = window.__ffmpegInstance || null;
   window.__trackerBlockList = window.__trackerBlockList || []; // List of tracker names to block
+  window.__videoDownloaderEnabled = window.__videoDownloaderEnabled !== false;
+  const isEnabled = () => window.__videoDownloaderEnabled !== false;
   const detectedBlobs = [];
 
   // Tracker blocking: intercept script creation
@@ -258,12 +260,14 @@ if (!window.__videoBlobsInitialized) {
         const origAppend = sb.appendBuffer;
         sb.appendBuffer = function(buffer) {
           try {
-            const copy = cloneBufferData(buffer);
-            if (copy) {
-              sbCapture.buffers.push(copy);
-              sbCapture.totalBytes += copy.byteLength;
-              if (sbCapture.buffers.length % 20 === 0) {
-                console.log('MSE capture', ms.__mseId, 'track:', sbCapture.mimeType, 'buffers:', sbCapture.buffers.length, 'bytes:', sbCapture.totalBytes);
+            if (isEnabled()) {
+              const copy = cloneBufferData(buffer);
+              if (copy) {
+                sbCapture.buffers.push(copy);
+                sbCapture.totalBytes += copy.byteLength;
+                if (sbCapture.buffers.length % 20 === 0) {
+                  console.log('MSE capture', ms.__mseId, 'track:', sbCapture.mimeType, 'buffers:', sbCapture.buffers.length, 'bytes:', sbCapture.totalBytes);
+                }
               }
             }
           } catch (e) {
@@ -295,8 +299,8 @@ if (!window.__videoBlobsInitialized) {
       console.log('✓ MediaSource URL mapped:', url.substring(0, 60) + '...', 'id:', blob.__mseId);
     }
 
-    // Store blob if it's a valid object with size
-    if (blob && typeof blob === 'object' && blob.size !== undefined) {
+    // Store blob if it's a valid object with size and feature is enabled
+    if (isEnabled() && blob && typeof blob === 'object' && blob.size !== undefined) {
       window.__videoBlobs[url] = blob;
       console.log('✓ Blob captured:', url.substring(0, 60) + '...', 'Size:', blob.size, 'bytes', 'Type:', blob.type);
       
@@ -338,6 +342,7 @@ if (!window.__videoBlobsInitialized) {
 
   // Monitor video elements
   function scanVideos() {
+    if (!isEnabled()) return;
     document.querySelectorAll('video').forEach(video => {
       if (video.src && video.src.startsWith('blob:')) {
         if (!detectedBlobs.some(b => b.url === video.src)) {
@@ -380,7 +385,17 @@ if (!window.__videoBlobsInitialized) {
   window.addEventListener('message', async (event) => {
     if (event.source !== window) return;
     
-    if (event.data.type === 'DOWNLOAD_BLOB') {
+    if (event.data.type === 'SET_VIDEO_DOWNLOADER_ENABLED') {
+      window.__videoDownloaderEnabled = !!event.data.enabled;
+      if (!isEnabled()) {
+        detectedBlobs.length = 0;
+      }
+    }
+    else if (event.data.type === 'DOWNLOAD_BLOB') {
+      if (!isEnabled()) {
+        window.postMessage({ type: 'DOWNLOAD_RESULT', result: { success: false, error: 'Video downloader is disabled' } }, '*');
+        return;
+      }
       const blobUrl = event.data.url;
       console.log('Download request for:', blobUrl);
       console.log('Blobs in storage:', Object.keys(window.__videoBlobs).length);

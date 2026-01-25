@@ -3,9 +3,12 @@ console.log('Content script started');
 
 // Store blobs received from page context
 let detectedBlobs = [];
+let videoDownloaderEnabled = true;
+let injectionAttempted = false;
 
 // Listen for messages from the injected script (page context)
 window.addEventListener('message', (event) => {
+  if (!videoDownloaderEnabled) return;
   if (event.source !== window) return;
   
   if (event.data.type === 'BLOB_DETECTED') {
@@ -22,6 +25,8 @@ window.addEventListener('message', (event) => {
 
 // Try to inject script into main world
 function injectScript() {
+  if (injectionAttempted || !videoDownloaderEnabled) return;
+  injectionAttempted = true;
   try {
     // First, inject blob interception ASAP (inline)
     const blobScript = document.createElement('script');
@@ -68,17 +73,53 @@ function injectScript() {
   }
 }
 
-// Inject immediately
-injectScript();
+// Handle toggle state and late injection
+function setVideoDownloaderState(enabled) {
+  videoDownloaderEnabled = enabled;
 
-// Also try to inject on DOMContentLoaded if needed
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', injectScript);
+  if (videoDownloaderEnabled && !injectionAttempted) {
+    injectScript();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', injectScript, { once: true });
+    }
+  }
+
+  if (!videoDownloaderEnabled) {
+    detectedBlobs = [];
+  }
+
+  // Notify page context so injected script can pause/resume capture
+  try {
+    window.postMessage({ type: 'SET_VIDEO_DOWNLOADER_ENABLED', enabled: videoDownloaderEnabled }, '*');
+  } catch (e) {
+    console.warn('Failed to post toggle state to page:', e.message);
+  }
 }
+
+chrome.storage.local.get('videoDownloaderEnabled', (data) => {
+  setVideoDownloaderState(data.videoDownloaderEnabled !== false);
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.videoDownloaderEnabled) {
+    setVideoDownloaderState(changes.videoDownloaderEnabled.newValue !== false);
+  }
+});
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Message received:', request.action);
+  
+  if (request.action === 'setVideoDownloaderEnabled') {
+    setVideoDownloaderState(request.enabled !== false);
+    sendResponse({ success: true, enabled: videoDownloaderEnabled });
+    return true;
+  }
+
+  if (!videoDownloaderEnabled && ['getBlobVideos', 'downloadBlob', 'clearBlobs'].includes(request.action)) {
+    sendResponse({ success: false, error: 'Video downloader is disabled' });
+    return true;
+  }
   
   if (request.action === 'getBlobVideos') {
     // Request fresh list from page context

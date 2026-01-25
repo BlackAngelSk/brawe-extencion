@@ -1,5 +1,18 @@
 // Background service worker for video detection
 let detectedVideos = {};
+let videoDownloaderEnabled = true;
+
+// Load persisted toggle state
+chrome.storage.local.get('videoDownloaderEnabled', (data) => {
+  videoDownloaderEnabled = data.videoDownloaderEnabled !== false;
+});
+
+// React to toggle changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.videoDownloaderEnabled) {
+    videoDownloaderEnabled = changes.videoDownloaderEnabled.newValue !== false;
+  }
+});
 
 // Video file extensions and MIME types to detect
 const VIDEO_PATTERNS = {
@@ -20,6 +33,7 @@ console.log('Video Downloader background script loaded');
 // Listen for web requests to detect video files
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
+    if (!videoDownloaderEnabled) return;
     try {
       const url = details.url;
       const tabId = details.tabId;
@@ -71,6 +85,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 // Also check response headers for video content
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
+    if (!videoDownloaderEnabled) return;
     try {
       const tabId = details.tabId;
       if (tabId === -1) return;
@@ -117,12 +132,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Message received:', request);
   
   try {
-    if (request.action === 'getDetectedVideos') {
+    if (request.action === 'setVideoDownloaderEnabled') {
+      videoDownloaderEnabled = request.enabled !== false;
+      sendResponse({ success: true, enabled: videoDownloaderEnabled });
+    } else if (request.action === 'getDetectedVideos') {
+      if (!videoDownloaderEnabled) {
+        sendResponse({ videos: [], disabled: true });
+        return true;
+      }
       const tabId = request.tabId;
       const videos = detectedVideos[tabId] || [];
       console.log(`Sending ${videos.length} videos for tab ${tabId}`);
       sendResponse({ videos: videos });
     } else if (request.action === 'clearDetectedVideos') {
+      if (!videoDownloaderEnabled) {
+        sendResponse({ success: true, disabled: true });
+        return true;
+      }
       const tabId = request.tabId;
       detectedVideos[tabId] = [];
       console.log(`Cleared videos for tab ${tabId}`);

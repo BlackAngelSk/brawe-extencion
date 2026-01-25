@@ -645,6 +645,99 @@ chrome.tabs.onRemoved.addListener(updateTabCount);
 chrome.tabs.onAttached.addListener(updateTabCount);
 chrome.tabs.onDetached.addListener(updateTabCount);
 
+// Collapsible helpers
+function initCollapsibles() {
+  const toggles = document.querySelectorAll('.collapse-toggle');
+  toggles.forEach((btn) => {
+    const targetId = btn.getAttribute('data-target');
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    btn.addEventListener('click', () => {
+      const collapsed = target.classList.toggle('collapsed');
+      btn.setAttribute('aria-expanded', (!collapsed).toString());
+      btn.textContent = collapsed ? '▸' : '▾';
+    });
+  });
+}
+
+initCollapsibles();
+
+// Video downloader enable/disable
+let videoDownloaderEnabled = true;
+
+function applyVideoDownloaderState() {
+  const toggle = document.getElementById('videoDownloaderToggle');
+  const status = document.getElementById('videoToggleStatus');
+  const disabledMessage = 'Video downloader is off. Toggle it on to enable scanning and downloads.';
+  const buttons = [
+    document.getElementById('scanNetworkVideos'),
+    document.getElementById('downloadVideo'),
+    document.getElementById('detectVideo')
+  ];
+
+  if (toggle) {
+    toggle.checked = videoDownloaderEnabled;
+  }
+
+  buttons.forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = !videoDownloaderEnabled;
+    btn.classList.toggle('disabled', !videoDownloaderEnabled);
+  });
+
+  if (status) {
+    status.textContent = videoDownloaderEnabled ? 'Video downloader is on' : disabledMessage;
+    status.className = 'status subtle';
+  }
+
+  if (!videoDownloaderEnabled) {
+    const videoStatus = document.getElementById('videoStatus');
+    if (videoStatus) {
+      videoStatus.textContent = disabledMessage;
+      videoStatus.className = 'status warning';
+    }
+  } else {
+    const videoStatus = document.getElementById('videoStatus');
+    if (videoStatus && videoStatus.textContent.startsWith('Video downloader is')) {
+      videoStatus.textContent = '';
+      videoStatus.className = 'status';
+    }
+  }
+}
+
+async function setVideoDownloaderEnabled(enabled, { persist = true } = {}) {
+  videoDownloaderEnabled = enabled;
+  applyVideoDownloaderState();
+
+  if (!persist) return;
+
+  await chrome.storage.local.set({ videoDownloaderEnabled });
+
+  // Update background service worker
+  chrome.runtime.sendMessage({ action: 'setVideoDownloaderEnabled', enabled: videoDownloaderEnabled }).catch(() => {});
+
+  // Inform all tabs so content scripts can stop/start
+  const tabs = await chrome.tabs.query({});
+  tabs.forEach((tab) => {
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'setVideoDownloaderEnabled',
+      enabled: videoDownloaderEnabled
+    }).catch(() => {});
+  });
+}
+
+async function initVideoDownloaderToggle() {
+  const toggle = document.getElementById('videoDownloaderToggle');
+  const stored = await chrome.storage.local.get('videoDownloaderEnabled');
+  await setVideoDownloaderEnabled(stored.videoDownloaderEnabled !== false, { persist: false });
+
+  if (toggle) {
+    toggle.addEventListener('change', async (e) => {
+      await setVideoDownloaderEnabled(e.target.checked);
+    });
+  }
+}
+
 // Video Downloader functionality
 const videoDownloaderConfig = {
   // Common video hosting platforms
@@ -688,6 +781,11 @@ async function detectVideoOnPage() {
   const statusDiv = document.getElementById('videoStatus');
   const videoInfoDiv = document.getElementById('videoInfo');
   const videoInput = document.getElementById('videoUrl');
+  if (!videoDownloaderEnabled) {
+    statusDiv.textContent = 'Video downloader is disabled. Toggle it on first.';
+    statusDiv.className = 'status warning';
+    return;
+  }
   
   try {
     statusDiv.textContent = '🔍 Scanning for videos...';
@@ -784,6 +882,11 @@ async function downloadVideo() {
   const videoInput = document.getElementById('videoUrl');
   const videoInfoDiv = document.getElementById('videoInfo');
   const url = videoInput.value.trim();
+  if (!videoDownloaderEnabled) {
+    statusDiv.textContent = 'Video downloader is disabled. Toggle it on first.';
+    statusDiv.className = 'status warning';
+    return;
+  }
   
   if (!url) {
     statusDiv.textContent = '⚠ Please enter a video URL';
@@ -1168,6 +1271,12 @@ async function downloadVideo() {
 async function scanNetworkForVideos() {
   const statusDiv = document.getElementById('videoStatus');
   const listDiv = document.getElementById('networkVideosList');
+  if (!videoDownloaderEnabled) {
+    statusDiv.textContent = 'Video downloader is disabled. Toggle it on first.';
+    statusDiv.className = 'status warning';
+    listDiv.classList.add('hidden');
+    return;
+  }
   
   try {
     statusDiv.textContent = '🔍 Scanning network traffic...';
@@ -1614,6 +1723,9 @@ document.getElementById('videoUrl').addEventListener('keypress', (e) => {
     downloadVideo();
   }
 });
+
+// Initialize toggle state on popup open
+initVideoDownloaderToggle();
 // Tracker blocking feature
 async function loadTrackerBlockList() {
   const data = await chrome.storage.local.get('trackerBlockList');

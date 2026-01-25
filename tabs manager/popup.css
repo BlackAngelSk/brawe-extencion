@@ -69,6 +69,112 @@ h1 {
   margin-bottom: 20px;
 }
 
+.collapsible {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fdfdfd;
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.collapse-toggle {
+  border: none;
+  background: #e0e0e0;
+  color: #333;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.collapse-toggle:hover {
+  background: #d5d5d5;
+}
+
+.collapsible-body {
+  margin-top: 10px;
+}
+
+.collapsible-body.collapsed {
+  display: none;
+}
+
+.video-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 24px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.2s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.toggle input:checked + .slider {
+  background-color: #4caf50;
+}
+
+.toggle input:checked + .slider:before {
+  transform: translateX(22px);
+}
+
+.status.subtle {
+  color: #607d8b;
+  min-height: 0;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.btn.disabled,
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .btn {
   width: 100%;
   padding: 12px 20px;
@@ -325,6 +431,20 @@ textarea:focus {
     border-bottom: 2px solid #404040;
   }
   
+  .collapsible {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+  }
+
+  .collapse-toggle {
+    background: #3a3a3a;
+    color: #ddd;
+  }
+
+  .collapse-toggle:hover {
+    background: #4a4a4a;
+  }
+
   .btn {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   }
@@ -718,4 +838,18 @@ textarea:focus {
   border-color: #667eea;
   background: white;
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tracker-input {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border: 2px solid #404040;
+  }
+
+  .tracker-input:focus {
+    border-color: #ff7043;
+    background: #121212;
+    box-shadow: none;
+  }
 }
