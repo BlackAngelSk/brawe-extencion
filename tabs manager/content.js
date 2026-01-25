@@ -20,6 +20,16 @@ window.addEventListener('message', (event) => {
   } else if (event.data.type === 'DOWNLOAD_RESULT') {
     // Store for retrieval by message handler
     window.__lastDownloadResult = event.data.result;
+  } else if (event.data.type === 'DOWNLOAD_VIDEO_URL') {
+    // Handle direct URL download via chrome downloads API
+    console.log('Download request for URL:', event.data.url, 'as', event.data.filename);
+    chrome.downloads.download({
+      url: event.data.url,
+      filename: 'Videos/' + event.data.filename,
+      saveAs: false
+    }, (downloadId) => {
+      console.log('Download started with ID:', downloadId);
+    });
   }
 });
 

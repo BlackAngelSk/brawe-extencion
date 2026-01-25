@@ -16,52 +16,55 @@ if (!window.__videoBlobsInitialized) {
   window.__videoDownloaderEnabled = window.__videoDownloaderEnabled !== false;
   const isEnabled = () => window.__videoDownloaderEnabled !== false;
   const detectedBlobs = [];
-
-  // Tracker blocking: intercept script creation
-  const originalCreateElement = document.createElement;
-  document.createElement = function(tagName) {
-    const element = originalCreateElement.call(document, tagName);
-    
-    if (tagName.toLowerCase() === 'script') {
-      const handler = {
-        set(target, prop, value) {
-          if (prop === 'src' && typeof value === 'string') {
-            // Check if this script URL contains any blocked tracker names
-            const trackerMatch = window.__trackerBlockList.some(tracker => 
-              value.toLowerCase().includes(tracker.toLowerCase())
-            );
-            
-            if (trackerMatch) {
-              console.warn('[TRACKER BLOCKED]', value);
-              return true; // Block the assignment
-            }
-          }
-          target[prop] = value;
-          return true;
-        }
-      };
-      
-      return new Proxy(element, handler);
-    }
-    
-    return element;
-  };
   
-  // Also block fetch/XMLHttpRequest to tracking endpoints
-  const origFetch = window.fetch;
-  window.fetch = function(...args) {
-    const url = args[0];
-    if (typeof url === 'string') {
-      const trackerMatch = window.__trackerBlockList.some(tracker =>
-        url.toLowerCase().includes(tracker.toLowerCase())
-      );
-      if (trackerMatch) {
-        console.warn('[TRACKER BLOCKED]', url);
-        return Promise.reject(new Error('Tracker blocked: ' + url));
-      }
-    }
-    return origFetch.apply(this, args);
-  };
+  // Disable MSE capture by default since it can break video playback on sites like YouTube
+  // Only capture blobs from URL.createObjectURL which is safer
+  let mseEnabled = false;
+
+  // Tracker blocking: intercept script creation (DISABLED - breaks YouTube)
+  // const originalCreateElement = document.createElement;
+  // document.createElement = function(tagName) {
+  //   const element = originalCreateElement.call(document, tagName);
+  //   
+  //   if (tagName.toLowerCase() === 'script') {
+  //     const handler = {
+  //       set(target, prop, value) {
+  //         if (prop === 'src' && typeof value === 'string') {
+  //           const trackerMatch = window.__trackerBlockList.some(tracker => 
+  //             value.toLowerCase().includes(tracker.toLowerCase())
+  //           );
+  //           
+  //           if (trackerMatch) {
+  //             console.warn('[TRACKER BLOCKED]', value);
+  //             return true;
+  //           }
+  //         }
+  //         target[prop] = value;
+  //         return true;
+  //       }
+  //     };
+  //     
+  //     return new Proxy(element, handler);
+  //   }
+  //   
+  //   return element;
+  // };
+  
+  // Also block fetch/XMLHttpRequest to tracking endpoints (DISABLED - breaks YouTube)
+  // const origFetch = window.fetch;
+  // window.fetch = function(...args) {
+  //   const url = args[0];
+  //   if (typeof url === 'string') {
+  //     const trackerMatch = window.__trackerBlockList.some(tracker =>
+  //       url.toLowerCase().includes(tracker.toLowerCase())
+  //     );
+  //     if (trackerMatch) {
+  //       console.warn('[TRACKER BLOCKED]', url);
+  //       return Promise.reject(new Error('Tracker blocked: ' + url));
+  //     }
+  //   }
+  //   return origFetch.apply(this, args);
+  // };
 
   // Helper: rebuild blob from captured MSE buffers (choose best track)
   function pickBestSource(capture) {
@@ -242,8 +245,8 @@ if (!window.__videoBlobsInitialized) {
     return null;
   }
   
-  // Intercept MediaSource to capture appended buffers
-  if (typeof MediaSource !== 'undefined') {
+  // Intercept MediaSource to capture appended buffers (DISABLED by default - can break playback)
+  if (typeof MediaSource !== 'undefined' && mseEnabled) {
     const origAddSourceBuffer = MediaSource.prototype.addSourceBuffer;
     MediaSource.prototype.addSourceBuffer = function(mimeType) {
       const sb = origAddSourceBuffer.apply(this, arguments);
@@ -260,7 +263,7 @@ if (!window.__videoBlobsInitialized) {
         const origAppend = sb.appendBuffer;
         sb.appendBuffer = function(buffer) {
           try {
-            if (isEnabled()) {
+            if (isEnabled() && mseEnabled) {
               const copy = cloneBufferData(buffer);
               if (copy) {
                 sbCapture.buffers.push(copy);
@@ -282,12 +285,13 @@ if (!window.__videoBlobsInitialized) {
     };
   }
 
-  // Intercept URL.createObjectURL to capture blobs and MediaSources
+  // Intercept URL.createObjectURL to capture blobs and MediaSources (DISABLED - can break video playback)
+  // The network detection in background.js is safer and more reliable
   const origCreateObjectURL = URL.createObjectURL;
   URL.createObjectURL = function(blob) {
     const url = origCreateObjectURL.apply(this, arguments);
     
-    // Store MediaSource mapping (ensure id exists even before addSourceBuffer runs)
+    // Only log MediaSource mapping, don't interfere with capture
     if (typeof MediaSource !== 'undefined' && blob instanceof MediaSource) {
       if (!blob.__mseId) {
         blob.__mseId = 'ms_' + Date.now() + '_' + Math.random().toString(36).slice(2);
@@ -299,87 +303,57 @@ if (!window.__videoBlobsInitialized) {
       console.log('✓ MediaSource URL mapped:', url.substring(0, 60) + '...', 'id:', blob.__mseId);
     }
 
-    // Store blob if it's a valid object with size and feature is enabled
-    if (isEnabled() && blob && typeof blob === 'object' && blob.size !== undefined) {
-      window.__videoBlobs[url] = blob;
-      console.log('✓ Blob captured:', url.substring(0, 60) + '...', 'Size:', blob.size, 'bytes', 'Type:', blob.type);
-      
-      // Track video blobs
-      if (blob.type && blob.type.startsWith('video/')) {
-        detectedBlobs.push({
-          url: url,
-          type: 'blob-video',
-          size: blob.size,
-          mimeType: blob.type,
-          timestamp: Date.now()
-        });
-      }
-    }
+    // Don't store blobs - use network detection instead (safer for YouTube)
     return url;
   };
 
-  // Intercept fetch for blob: URLs so popup/content can fetch reconstructed blobs
-  if (typeof window.fetch === 'function') {
-    const origFetch = window.fetch;
-    window.fetch = async function(resource, init) {
-      try {
-        const url = typeof resource === 'string' ? resource : (resource && resource.url);
-        if (url && typeof url === 'string' && url.startsWith('blob:')) {
-          let blob = window.__videoBlobs[url];
-          if (!blob) {
-            blob = reconstructBlobFromMSE(url);
-          }
-          if (blob) {
-            return new Response(blob, { status: 200, statusText: 'OK' });
-          }
-        }
-      } catch (e) {
-        console.warn('blob fetch shim failed:', e.message);
-      }
-      return origFetch.apply(this, arguments);
-    };
-  }
+  // Intercept fetch for blob: URLs so popup/content can fetch reconstructed blobs (DISABLED - can break playback)
+  // if (typeof window.fetch === 'function') {
+  //   const origFetch = window.fetch;
+  //   window.fetch = async function(resource, init) {
+  //     try {
+  //       const url = typeof resource === 'string' ? resource : (resource && resource.url);
+  //       if (url && typeof url === 'string' && url.startsWith('blob:')) {
+  //         let blob = window.__videoBlobs[url];
+  //         if (!blob) {
+  //           blob = reconstructBlobFromMSE(url);
+  //         }
+  //         if (blob) {
+  //           return new Response(blob, { status: 200, statusText: 'OK' });
+  //         }
+  //       }
+  //     } catch (e) {
+  //       console.warn('blob fetch shim failed:', e.message);
+  //     }
+  //     return origFetch.apply(this, arguments);
+  //   };
+  // }
 
-  // Monitor video elements
+  // Monitor video elements with throttling to avoid freezing (DISABLED - use network detection instead)
+  let lastScanTime = 0;
+  const SCAN_THROTTLE_MS = 3000;
+  
   function scanVideos() {
-    if (!isEnabled()) return;
-    document.querySelectorAll('video').forEach(video => {
-      if (video.src && video.src.startsWith('blob:')) {
-        if (!detectedBlobs.some(b => b.url === video.src)) {
-          detectedBlobs.push({
-            url: video.src,
-            type: 'video-element',
-            timestamp: Date.now()
-          });
-        }
-      }
-      video.querySelectorAll('source').forEach(source => {
-        if (source.src && source.src.startsWith('blob:')) {
-          if (!detectedBlobs.some(b => b.url === source.src)) {
-            detectedBlobs.push({
-              url: source.src,
-              type: 'source-element',
-              timestamp: Date.now()
-            });
-          }
-        }
-      });
-    });
+    // Disabled - network detection is safer
+    return;
   }
 
-  scanVideos();
-  setInterval(scanVideos, 1000);
+  // Don't scan on page load
+  // scanVideos();
+  
+  // Don't use interval scanning (causes YouTube freezing)
+  // setInterval(scanVideos, 5000);
 
-  // Attach MutationObserver when body is ready
-  function attachObserver() {
-    if (document.body) {
-      new MutationObserver(scanVideos).observe(document.body, { subtree: true, childList: true });
-      console.log('Mutation observer attached');
-    } else {
-      setTimeout(attachObserver, 100);
-    }
-  }
-  attachObserver();
+  // Don't attach MutationObserver (causes YouTube to stall)
+  // function attachObserver() {
+  //   if (document.body) {
+  //     new MutationObserver(scanVideos).observe(document.body, { subtree: true, childList: true });
+  //     console.log('Mutation observer attached');
+  //   } else {
+  //     setTimeout(attachObserver, 100);
+  //   }
+  // }
+  // attachObserver();
 
   // Listen for download requests
   window.addEventListener('message', async (event) => {
@@ -396,91 +370,35 @@ if (!window.__videoBlobsInitialized) {
         window.postMessage({ type: 'DOWNLOAD_RESULT', result: { success: false, error: 'Video downloader is disabled' } }, '*');
         return;
       }
-      const blobUrl = event.data.url;
-      console.log('Download request for:', blobUrl);
-      console.log('Blobs in storage:', Object.keys(window.__videoBlobs).length);
+      const videoUrl = event.data.url;
+      console.log('Download request for:', videoUrl);
       
       try {
-        let blob = window.__videoBlobs[blobUrl];
-
-        // Fallback: if not a Blob, try reconstructing from MediaSource capture
-        if (!blob) {
-          blob = reconstructBlobFromMSE(blobUrl);
-        }
-
-        logSourcesFor(blobUrl);
-
-        if (!blob) {
-          console.error('❌ Blob not found in storage for:', blobUrl);
-          throw new Error('Blob not found in storage');
+        // Helper: sanitize filename
+        function sanitizeFilename(name) {
+          return name.replace(/[^a-z0-9_-]/gi, '_').slice(0, 100);
         }
         
-        console.log('✓ Found blob in storage:', blob.size, 'bytes', blob.type);
-        console.log('Checking for audio track...');
+        // Extract filename from URL or use page title
+        const urlParts = videoUrl.split('/');
+        let filename = urlParts[urlParts.length - 1].split('?')[0] || document.title || 'video';
         
-        // Check for audio BEFORE downloading video
-        console.log('Calling reconstructAudioBlobFromMSE with:', blobUrl);
-        const audioRebuild = reconstructAudioBlobFromMSE(blobUrl);
-        console.log('reconstructAudioBlobFromMSE returned:', audioRebuild);
-        
-        if (audioRebuild && audioRebuild.blob) {
-          const audioBlob = audioRebuild.blob;
-          console.log('✓ Audio track available:', audioBlob.type, audioBlob.size, 'bytes');
-          console.log('NOTE: In-browser muxing blocked by YouTube CSP. Downloading separate video + audio files.');
-          console.log('To combine: Use free tools like ffmpeg, VLC, HandBrake, or online video mergers.');
-          
-          // Download video + audio separately (muxing blocked by CSP)
-          console.log('Downloading video separately...');
-          const videoUrl = URL.createObjectURL(blob);
-          const videoLink = document.createElement('a');
-          videoLink.href = videoUrl;
-          let videoExt = '.mp4';
-          if (blob.type && blob.type.includes('webm')) videoExt = '.webm';
-          else if (blob.type && blob.type.includes('ogg')) videoExt = '.ogg';
-          videoLink.download = 'video_' + Date.now() + videoExt;
-          document.body.appendChild(videoLink);
-          videoLink.click();
-          setTimeout(() => {
-            videoLink.remove();
-            URL.revokeObjectURL(videoUrl);
-          }, 500);
-          console.log('✓ Video download triggered:', videoLink.download);
-          
-          console.log('Downloading audio separately...');
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audioLink = document.createElement('a');
-          audioLink.href = audioUrl;
-          let audioExt = '.webm';
-          if (audioBlob.type && audioBlob.type.includes('mp4')) audioExt = '.m4a';
-          else if (audioBlob.type && audioBlob.type.includes('ogg')) audioExt = '.ogg';
-          audioLink.download = 'audio_' + Date.now() + audioExt;
-          document.body.appendChild(audioLink);
-          setTimeout(() => {
-            audioLink.click();
-            setTimeout(() => {
-              audioLink.remove();
-              URL.revokeObjectURL(audioUrl);
-            }, 500);
-          }, 300);
-          console.log('✓ Audio download triggered:', audioLink.download, 'mime:', audioBlob.type, 'size:', audioBlob.size);
+        // If no extension, add one based on common video patterns
+        if (!filename.match(/\.(mp4|webm|ogg|mov|avi|mkv|m3u8)$/i)) {
+          filename = sanitizeFilename(document.title || 'video') + '.mp4';
         } else {
-          // No audio, just download video
-          console.warn('No audio track found for', blobUrl, '- downloading video only');
-          const downloadUrl = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          let ext = '.mp4';
-          if (blob.type && blob.type.includes('webm')) ext = '.webm';
-          else if (blob.type && blob.type.includes('ogg')) ext = '.ogg';
-          link.download = 'video_' + Date.now() + ext;
-          document.body.appendChild(link);
-          link.click();
-          setTimeout(() => {
-            link.remove();
-            URL.revokeObjectURL(downloadUrl);
-          }, 500);
-          console.log('✓ Video-only download triggered:', link.download);
+          filename = sanitizeFilename(filename);
         }
+        
+        console.log('✓ Downloading from URL:', videoUrl);
+        console.log('✓ Filename:', filename);
+        
+        // Use chrome extension download API via message to content script
+        window.postMessage({ 
+          type: 'DOWNLOAD_VIDEO_URL',
+          url: videoUrl,
+          filename: filename
+        }, '*');
         
         // Send success response
         window.postMessage({ type: 'DOWNLOAD_RESULT', result: { success: true } }, '*');
