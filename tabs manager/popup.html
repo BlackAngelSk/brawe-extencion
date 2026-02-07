@@ -133,41 +133,6 @@
       </div>
     </div>
 
-    <div class="section video-section collapsible">
-      <div class="video-header collapsible-header" data-target="videoBody">
-        <h3>📹 Video Downloader(broken for now)</h3>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <label class="toggle">
-            <input type="checkbox" id="videoDownloaderToggle">
-            <span class="slider"></span>
-          </label>
-          <button class="collapse-toggle" data-target="videoBody" aria-expanded="true" title="Collapse/expand">▾</button>
-        </div>
-      </div>
-      <div id="videoToggleStatus" class="status subtle"></div>
-      <div id="videoBody" class="collapsible-body">
-        <button id="scanNetworkVideos" class="btn btn-scan">
-          🔍 Scan Network for Videos
-        </button>
-        <div id="networkVideosList" class="network-videos hidden"></div>
-        
-        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
-          <input type="text" id="videoUrl" class="video-input" placeholder="Or paste video URL here...">
-          <button id="downloadVideo" class="btn btn-download">
-            ⬇️ Download Video
-          </button>
-          <button id="detectVideo" class="btn btn-secondary">
-            🔍 Detect Video on Page
-          </button>
-        </div>
-        
-        <div id="videoStatus" class="status"></div>
-        <div id="videoInfo" class="video-info hidden">
-          <div class="video-title" id="videoTitle"></div>
-          <div class="video-formats" id="videoFormats"></div>
-        </div>
-      </div>
-    </div>
   </div>
   
   <script src="popup.js"></script>
