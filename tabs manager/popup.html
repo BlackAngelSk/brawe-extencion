@@ -22,6 +22,96 @@
       </div>
     </div>
     
+    <!-- Tab Statistics Dashboard -->
+    <div class="section statistics-section collapsible">
+      <div class="collapsible-header" data-target="statisticsBody">
+        <h3>📊 Tab Statistics</h3>
+        <button class="collapse-toggle" data-target="statisticsBody" aria-expanded="true" title="Collapse/expand">▾</button>
+      </div>
+      <div id="statisticsBody" class="collapsible-body">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Most Visited Domain</div>
+            <div id="statMostVisited" class="stat-value">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Unique Domains</div>
+            <div id="statUniqueDomains" class="stat-value">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pinned Tabs</div>
+            <div id="statPinnedTabs" class="stat-value">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Average Tabs/Window</div>
+            <div id="statAvgTabs" class="stat-value">0</div>
+          </div>
+        </div>
+        <div class="domain-breakdown">
+          <div class="breakdown-title">Domain Breakdown</div>
+          <div id="domainList" class="domain-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Search & Filter -->
+    <div class="section search-section collapsible">
+      <div class="collapsible-header" data-target="searchBody">
+        <h3>🔍 Search & Filter Tabs</h3>
+        <button class="collapse-toggle" data-target="searchBody" aria-expanded="true" title="Collapse/expand">▾</button>
+      </div>
+      <div id="searchBody" class="collapsible-body">
+        <div class="search-box">
+          <input type="text" id="tabSearch" placeholder="Search tabs by title or URL..." class="search-input">
+          <button id="clearSearch" class="btn-icon" title="Clear search">✕</button>
+        </div>
+        <div class="filter-options">
+          <label class="checkbox-label">
+            <input type="checkbox" id="filterPinned">
+            Show pinned only
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="filterAudible">
+            Show audible only
+          </label>
+        </div>
+        <div id="searchResults" class="search-results"></div>
+        <div id="searchStatus" class="status"></div>
+      </div>
+    </div>
+
+    <!-- Tab Sorting & Pin Management -->
+    <div class="section tools-section collapsible">
+      <div class="collapsible-header" data-target="toolsBody">
+        <h3>🛠️ Tab Tools</h3>
+        <button class="collapse-toggle" data-target="toolsBody" aria-expanded="true" title="Collapse/expand">▾</button>
+      </div>
+      <div id="toolsBody" class="collapsible-body">
+        <!-- Tab Sorting -->
+        <div class="tool-group">
+          <h4>Sort Tabs</h4>
+          <div class="button-row">
+            <button id="sortByDomain" class="btn btn-secondary btn-small">📁 By Domain</button>
+            <button id="sortAlphabetically" class="btn btn-secondary btn-small">🔤 A-Z</button>
+            <button id="sortByRecent" class="btn btn-secondary btn-small">🕐 Recent</button>
+          </div>
+          <div id="sortStatus" class="status"></div>
+        </div>
+
+        <!-- Pin Management -->
+        <div class="tool-group">
+          <h4>Pin Management</h4>
+          <div class="button-row">
+            <button id="pinAll" class="btn btn-secondary btn-small">📌 Pin All</button>
+            <button id="unpinAll" class="btn btn-secondary btn-small">📍 Unpin All</button>
+            <button id="pinByDomain" class="btn btn-secondary btn-small">📌 Pin by Domain</button>
+          </div>
+          <input type="text" id="pinDomainInput" placeholder="Enter domain (e.g., github.com)" class="domain-input hidden">
+          <div id="pinStatus" class="status"></div>
+        </div>
+      </div>
+    </div>
+    
     <div class="section collapsible">
       <div class="collapsible-header" data-target="tabManagerBody">
         <h3>🗂️ Tab Manager</h3>
@@ -132,9 +222,7 @@
         </div>
       </div>
     </div>
-
   </div>
-  
   <script src="popup.js"></script>
 </body>
 </html>

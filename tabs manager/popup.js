@@ -1761,3 +1761,396 @@ document.getElementById('saveTrackerList').addEventListener('click', async () =>
 
 // Load tracker list on popup open
 loadTrackerBlockList();
+
+// ==================== TAB STATISTICS ====================
+
+async function updateTabStatistics() {
+  try {
+    const allTabs = await chrome.tabs.query({});
+    const allWindows = await chrome.windows.getAll();
+    
+    // Calculate statistics
+    const pinnedTabs = allTabs.filter(tab => tab.pinned);
+    const domainCount = {};
+    
+    allTabs.forEach(tab => {
+      try {
+        const url = new URL(tab.url);
+        const domain = url.hostname;
+        domainCount[domain] = (domainCount[domain] || 0) + 1;
+      } catch (e) {
+        // Skip invalid URLs
+      }
+    });
+    
+    // Find most visited domain
+    let mostVisited = '--';
+    let maxCount = 0;
+    for (const [domain, count] of Object.entries(domainCount)) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostVisited = domain;
+      }
+    }
+    
+    // Update UI
+    document.getElementById('statMostVisited').textContent = mostVisited;
+    document.getElementById('statUniqueDomains').textContent = Object.keys(domainCount).length;
+    document.getElementById('statPinnedTabs').textContent = pinnedTabs.length;
+    document.getElementById('statAvgTabs').textContent = 
+      allWindows.length > 0 ? Math.round(allTabs.length / allWindows.length) : 0;
+    
+    // Highlight pinned tabs stat card if there are pinned tabs
+    const pinnedStatCard = document.getElementById('statPinnedTabs')?.closest('.stat-card');
+    if (pinnedStatCard) {
+      if (pinnedTabs.length > 0) {
+        pinnedStatCard.classList.add('pinned-highlight');
+      } else {
+        pinnedStatCard.classList.remove('pinned-highlight');
+      }
+    }
+    
+    // Display domain breakdown (top 10)
+    const domainList = document.getElementById('domainList');
+    const sortedDomains = Object.entries(domainCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    
+    domainList.innerHTML = sortedDomains.map(([domain, count]) => `
+      <div class="domain-item">
+        <span class="domain-name">${domain}</span>
+        <span class="domain-count">${count} tab${count > 1 ? 's' : ''}</span>
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error updating statistics:', error);
+  }
+}
+
+// ==================== TAB SEARCH & FILTER ====================
+
+let searchResultTabs = [];
+
+async function searchTabs() {
+  const searchInput = document.getElementById('tabSearch');
+  const filterPinned = document.getElementById('filterPinned').checked;
+  const filterAudible = document.getElementById('filterAudible').checked;
+  const resultsDiv = document.getElementById('searchResults');
+  const statusDiv = document.getElementById('searchStatus');
+  
+  const query = searchInput.value.toLowerCase().trim();
+  
+  if (!query && !filterPinned && !filterAudible) {
+    resultsDiv.innerHTML = '';
+    statusDiv.textContent = '';
+    return;
+  }
+  
+  try {
+    let tabs = await chrome.tabs.query({});
+    
+    // Apply filters
+    if (filterPinned) {
+      tabs = tabs.filter(tab => tab.pinned);
+    }
+    if (filterAudible) {
+      tabs = tabs.filter(tab => tab.audible);
+    }
+    if (query) {
+      tabs = tabs.filter(tab => 
+        tab.title.toLowerCase().includes(query) || 
+        tab.url.toLowerCase().includes(query)
+      );
+    }
+    
+    searchResultTabs = tabs;
+    
+    if (tabs.length === 0) {
+      resultsDiv.innerHTML = '<div class="no-results">No tabs found</div>';
+      statusDiv.textContent = '';
+      return;
+    }
+    
+    // Display results
+    resultsDiv.innerHTML = tabs.slice(0, 50).map(tab => {
+      const favicon = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
+      const title = tab.title || 'Untitled';
+      const url = new URL(tab.url).hostname;
+      const badges = [];
+      if (tab.pinned) badges.push('📌');
+      if (tab.audible) badges.push('🔊');
+      const pinnedClass = tab.pinned ? 'pinned' : '';
+      const pinnedBadge = tab.pinned ? '<span class="pin-badge">PINNED</span>' : '';
+      
+      return `
+        <div class="search-result-item ${pinnedClass}" data-tab-id="${tab.id}">
+          <img src="${favicon}" class="tab-favicon" onerror="this.style.display='none'">
+          <div class="tab-info">
+            <div class="tab-title">${badges.join(' ')} ${title}</div>
+            <div class="tab-url">${url}</div>
+          </div>
+          ${pinnedBadge}
+          <button class="btn-icon tab-action" data-action="goto" data-tab-id="${tab.id}" title="Go to tab">→</button>
+          <button class="btn-icon tab-action" data-action="close" data-tab-id="${tab.id}" title="Close tab">✕</button>
+        </div>
+      `;
+    }).join('');
+    
+    statusDiv.textContent = tabs.length > 50 ? 
+      `Showing 50 of ${tabs.length} results` : 
+      `Found ${tabs.length} tab${tabs.length > 1 ? 's' : ''}`;
+    statusDiv.className = 'status success';
+    
+    // Add event listeners to action buttons
+    document.querySelectorAll('.tab-action').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const tabId = parseInt(btn.dataset.tabId);
+        const action = btn.dataset.action;
+        
+        if (action === 'goto') {
+          await chrome.tabs.update(tabId, { active: true });
+          await chrome.windows.update((await chrome.tabs.get(tabId)).windowId, { focused: true });
+        } else if (action === 'close') {
+          await chrome.tabs.remove(tabId);
+          searchTabs(); // Refresh results
+        }
+      });
+    });
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+}
+
+// Search input event listeners
+const tabSearchEl = document.getElementById('tabSearch');
+const filterPinnedEl = document.getElementById('filterPinned');
+const filterAudibleEl = document.getElementById('filterAudible');
+const clearSearchEl = document.getElementById('clearSearch');
+
+if (tabSearchEl) tabSearchEl.addEventListener('input', searchTabs);
+if (filterPinnedEl) filterPinnedEl.addEventListener('change', searchTabs);
+if (filterAudibleEl) filterAudibleEl.addEventListener('change', searchTabs);
+
+if (clearSearchEl) {
+  clearSearchEl.addEventListener('click', () => {
+    if (tabSearchEl) tabSearchEl.value = '';
+    if (filterPinnedEl) filterPinnedEl.checked = false;
+    if (filterAudibleEl) filterAudibleEl.checked = false;
+    searchTabs();
+  });
+}
+
+// ==================== TAB SORTING ====================
+
+async function sortTabsByDomain() {
+  const statusDiv = document.getElementById('sortStatus');
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const grouped = {};
+    
+    tabs.forEach(tab => {
+      try {
+        const domain = new URL(tab.url).hostname;
+        if (!grouped[domain]) grouped[domain] = [];
+        grouped[domain].push(tab);
+      } catch (e) {
+        if (!grouped['other']) grouped['other'] = [];
+        grouped['other'].push(tab);
+      }
+    });
+    
+    // Sort domains alphabetically
+    const sortedDomains = Object.keys(grouped).sort();
+    let index = 0;
+    
+    for (const domain of sortedDomains) {
+      for (const tab of grouped[domain]) {
+        await chrome.tabs.move(tab.id, { index: index++ });
+      }
+    }
+    
+    statusDiv.textContent = `✓ Sorted ${tabs.length} tabs by domain`;
+    statusDiv.className = 'status success';
+    setTimeout(() => { statusDiv.textContent = ''; }, 3000);
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+}
+
+async function sortTabsAlphabetically() {
+  const statusDiv = document.getElementById('sortStatus');
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const sorted = tabs.sort((a, b) => a.title.localeCompare(b.title));
+    
+    for (let i = 0; i < sorted.length; i++) {
+      await chrome.tabs.move(sorted[i].id, { index: i });
+    }
+    
+    statusDiv.textContent = `✓ Sorted ${tabs.length} tabs alphabetically`;
+    statusDiv.className = 'status success';
+    setTimeout(() => { statusDiv.textContent = ''; }, 3000);
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+}
+
+async function sortTabsByRecent() {
+  const statusDiv = document.getElementById('sortStatus');
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    // Sort by lastAccessed (most recent first)
+    const sorted = tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+    
+    for (let i = 0; i < sorted.length; i++) {
+      await chrome.tabs.move(sorted[i].id, { index: i });
+    }
+    
+    statusDiv.textContent = `✓ Sorted ${tabs.length} tabs by recent activity`;
+    statusDiv.className = 'status success';
+    setTimeout(() => { statusDiv.textContent = ''; }, 3000);
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+}
+
+const sortByDomainBtn = document.getElementById('sortByDomain');
+const sortAlphabeticallyBtn = document.getElementById('sortAlphabetically');
+const sortByRecentBtn = document.getElementById('sortByRecent');
+
+if (sortByDomainBtn) sortByDomainBtn.addEventListener('click', sortTabsByDomain);
+if (sortAlphabeticallyBtn) sortAlphabeticallyBtn.addEventListener('click', sortTabsAlphabetically);
+if (sortByRecentBtn) sortByRecentBtn.addEventListener('click', sortTabsByRecent);
+
+// ==================== PIN MANAGEMENT ====================
+
+async function pinAllTabs() {
+  const statusDiv = document.getElementById('pinStatus');
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true, pinned: false });
+    
+    for (const tab of tabs) {
+      await chrome.tabs.update(tab.id, { pinned: true });
+    }
+    
+    statusDiv.textContent = `✓ Pinned ${tabs.length} tabs`;
+    statusDiv.className = 'status success';
+    setTimeout(() => { statusDiv.textContent = ''; }, 3000);
+    updateTabStatistics();
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+}
+
+async function unpinAllTabs() {
+  const statusDiv = document.getElementById('pinStatus');
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true, pinned: true });
+    
+    for (const tab of tabs) {
+      await chrome.tabs.update(tab.id, { pinned: false });
+    }
+    
+    statusDiv.textContent = `✓ Unpinned ${tabs.length} tabs`;
+    statusDiv.className = 'status success';
+    setTimeout(() => { statusDiv.textContent = ''; }, 3000);
+    updateTabStatistics();
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+}
+
+async function pinByDomain() {
+  const input = document.getElementById('pinDomainInput');
+  const statusDiv = document.getElementById('pinStatus');
+  const domain = input.value.trim().toLowerCase();
+  
+  if (!domain) {
+    statusDiv.textContent = '✗ Please enter a domain';
+    statusDiv.className = 'status error';
+    return;
+  }
+  
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    let pinnedCount = 0;
+    
+    for (const tab of tabs) {
+      try {
+        const tabDomain = new URL(tab.url).hostname.toLowerCase();
+        if (tabDomain.includes(domain) || domain.includes(tabDomain)) {
+          await chrome.tabs.update(tab.id, { pinned: true });
+          pinnedCount++;
+        }
+      } catch (e) {
+        // Skip invalid URLs
+      }
+    }
+    
+    if (pinnedCount === 0) {
+      statusDiv.textContent = `✗ No tabs found matching "${domain}"`;
+      statusDiv.className = 'status error';
+    } else {
+      statusDiv.textContent = `✓ Pinned ${pinnedCount} tab${pinnedCount > 1 ? 's' : ''} from ${domain}`;
+      statusDiv.className = 'status success';
+      input.value = '';
+      input.classList.add('hidden');
+      setTimeout(() => { statusDiv.textContent = ''; }, 3000);
+      updateTabStatistics();
+    }
+    
+  } catch (error) {
+    statusDiv.textContent = `✗ Error: ${error.message}`;
+    statusDiv.className = 'status error';
+  }
+}
+
+const pinAllBtn = document.getElementById('pinAll');
+const unpinAllBtn = document.getElementById('unpinAll');
+const pinByDomainBtn = document.getElementById('pinByDomain');
+const pinDomainInputEl = document.getElementById('pinDomainInput');
+
+if (pinAllBtn) pinAllBtn.addEventListener('click', pinAllTabs);
+if (unpinAllBtn) unpinAllBtn.addEventListener('click', unpinAllTabs);
+
+if (pinByDomainBtn) {
+  pinByDomainBtn.addEventListener('click', () => {
+    const input = document.getElementById('pinDomainInput');
+    if (input && input.classList.contains('hidden')) {
+      input.classList.remove('hidden');
+      input.focus();
+    } else {
+      pinByDomain();
+    }
+  });
+}
+
+if (pinDomainInputEl) {
+  pinDomainInputEl.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      pinByDomain();
+    }
+  });
+}
+
+// Initialize statistics on load
+updateTabStatistics();
+
+// Update statistics when tabs change
+chrome.tabs.onCreated.addListener(updateTabStatistics);
+chrome.tabs.onRemoved.addListener(updateTabStatistics);
+chrome.tabs.onUpdated.addListener(updateTabStatistics);
